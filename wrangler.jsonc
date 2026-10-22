@@ -12,8 +12,8 @@
     { "binding": "RR_KV", "id": "b7098bbac539438fadfc1a70242b1e62" }
   ],
   "vars": {
-    // Se completan después de crear la aplicación de Cloudflare Access (ver LEEME-PANEL.md)
-    "TEAM_DOMAIN": "",
-    "POLICY_AUD": ""
+    // Cloudflare Access: equipo y AUD de la aplicación que protege redroomchile.cl/admin
+    "TEAM_DOMAIN": "https://noisy-queen-8049.cloudflareaccess.com",
+    "POLICY_AUD": "f158a7d1d90960056220a573244890f716dff7460f9a5c935bb92c04f5a95259"
   }
 }
