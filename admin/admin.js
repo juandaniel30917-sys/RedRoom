@@ -1,26 +1,23 @@
 /* REDROOM · Panel de administración (/admin)
-   - Sin base de datos: el contenido vive en data/contenido.js dentro del repositorio de GitHub.
-   - Inicias sesión con GitHub (token personal). Solo quien tenga permiso de escritura en el repo puede publicar.
-   - "Publicar cambios" hace un commit de data/contenido.js; Cloudflare vuelve a publicar la web sola.
+   - El ingreso lo hace Cloudflare Access: solo los correos autorizados llegan (reciben un código por correo).
+   - El contenido se guarda en Cloudflare (KV) mediante la API del Worker (/admin/api/*). Publicar es inmediato.
    - Modo sin conexión: editas y descargas contenido.js para subirlo a mano. */
 (function () {
   "use strict";
 
   /* ================= Configuración ================= */
-  var REPO_DEFAULT = {owner: "juandaniel30917-sys", repo: "RedRoom", branch: "main"};
   var DATA_FILE = "data/contenido.js";
-  var UPLOAD_DIR = "assets/subidas/";
-  var API = "https://api.github.com";
-  var LS_AUTH = "rr_admin_auth", LS_WORK = "rr_admin_trabajo", LS_PREVIEW = "rr_borrador";
+  var API = "api/";
+  var LS_WORK = "rr_admin_trabajo", LS_PREVIEW = "rr_borrador";
   var FONTS_T = ["Bebas Neue", "Anton", "Oswald", "Big Shoulders Display", "Archivo Black", "Space Grotesk", "Playfair Display", "DM Serif Display"];
   var FONTS_B = ["Inter", "IBM Plex Sans", "DM Sans", "Work Sans", "Manrope", "Space Grotesk", "Roboto", "Lora"];
   var PAGE_NAMES = {discover: "Descubrir", work: "Trabajos", commercial: "Comercial", artistic: "Artístico", mood: "Sensación", build: "Arma tu proyecto", maule: "Redroom Maule (mapa)", about: "Nosotros", collaborate: "Colabora", contact: "Contacto", index: "Entrada", project: "Ficha de un trabajo"};
 
   /* ================= Estado ================= */
   var st = {
-    mode: null,          /* "github" | "local" */
-    token: "", owner: "", repo: "", branch: "", base: "", user: null,
-    sha: null,           /* sha del archivo publicado sobre el que se edita */
+    mode: null,          /* "nube" | "local" */
+    email: "",
+    sha: null,           /* versión publicada sobre la que se edita */
     data: null,          /* contenido en edición */
     published: "",       /* JSON del contenido publicado (para saber si hay cambios) */
     route: "inicio",
@@ -60,8 +57,6 @@
   var MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sept", "oct", "nov", "dic"];
   function fechaTexto(iso) { var m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? (+m[3]) + " " + MESES[+m[2] - 1] + " " + m[1] : ""; }
   function hoy() { return new Date().toISOString().slice(0, 10); }
-  function b64enc(str) { return btoa(unescape(encodeURIComponent(str))); }
-  function b64dec(b) { return decodeURIComponent(escape(atob(String(b).replace(/\s/g, "")))); }
   function store(k, v) { try { if (v == null) { localStorage.removeItem(k); } else { localStorage.setItem(k, typeof v === "string" ? v : JSON.stringify(v)); } } catch (e) {} }
   function load(k) { try { var v = localStorage.getItem(k); return v ? JSON.parse(v) : null; } catch (e) { return null; } }
   function imgSrc(p) { if (!p) { return ""; } if (st.imgCache[p]) { return st.imgCache[p]; } return /^(https?:|data:)/.test(p) ? p : "../" + p; }
@@ -85,34 +80,26 @@
   }
   function confirmar(title, text, ok) { return modal(title, h("p", {class: "muted", text: text}), [{label: "Cancelar", value: false}, {label: ok || "Aceptar", value: true, cls: "btn--primary"}]); }
 
-  /* ================= GitHub ================= */
-  function gh(path, opts) {
+  /* ================= API (Worker de Cloudflare) ================= */
+  function api(path, opts) {
     opts = opts || {};
+    var isJson = opts.body && !(opts.body instanceof Blob);
     return fetch(API + path, {
-      method: opts.method || "GET", cache: "no-store",
-      headers: Object.assign({"Accept": "application/vnd.github+json", "Authorization": "Bearer " + st.token, "X-GitHub-Api-Version": "2022-11-28"}, opts.body ? {"Content-Type": "application/json"} : {}),
-      body: opts.body ? JSON.stringify(opts.body) : undefined
+      method: opts.method || "GET", cache: "no-store", credentials: "same-origin",
+      headers: Object.assign({}, isJson ? {"Content-Type": "application/json"} : {}, opts.headers || {}),
+      body: isJson ? JSON.stringify(opts.body) : opts.body
     }).then(function (r) {
       return r.text().then(function (t) {
         var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) {}
-        if (!r.ok) { var err = new Error((j && j.message) || ("Error " + r.status)); err.status = r.status; throw err; }
+        if (!r.ok || !j) { var err = new Error((j && j.error) || "No pude conectar con el servidor (" + r.status + ")."); err.status = r.status; err.code = (j && j.code) || (!j ? "NO_API" : ""); throw err; }
         return j;
       });
     });
   }
-  function repoPath(p) { return "/repos/" + st.owner + "/" + st.repo + "/contents/" + p.split("/").map(encodeURIComponent).join("/"); }
-  function ghRead(path, ref) { return gh(repoPath(path) + "?ref=" + encodeURIComponent(ref || st.branch)); }
-  function ghWrite(path, contentB64, message, sha) {
-    var body = {message: message, content: contentB64, branch: st.branch};
-    if (sha) { body.sha = sha; }
-    return gh(repoPath(path), {method: "PUT", body: body});
-  }
   function explain(e) {
     var m = e && e.message || String(e);
-    if (e && e.status === 401) { return "GitHub rechazó el token (vencido o mal copiado). Crea uno nuevo y vuelve a entrar."; }
-    if (e && e.status === 403) { return "El token no tiene permiso de escritura en este repositorio. Revisa que tenga «Contents: Read and write». (" + m + ")"; }
-    if (e && e.status === 404) { return "No encontré el repositorio o el archivo. Revisa usuario, repositorio y rama, y que el token incluya ese repositorio."; }
-    if (/Failed to fetch|NetworkError/i.test(m)) { return "Sin conexión con GitHub. Revisa tu internet."; }
+    if (e && (e.code === "NO_LOGIN" || e.code === "BAD_TOKEN")) { return "Tu sesión venció. Recarga la página para volver a entrar con tu correo."; }
+    if (/Failed to fetch|NetworkError/i.test(m)) { return "Sin conexión. Revisa tu internet."; }
     return m;
   }
 
@@ -128,39 +115,13 @@
   }
 
   /* ================= Sesión ================= */
-  function login(auth, remember) {
-    st.mode = "github"; st.token = auth.token; st.owner = auth.owner; st.repo = auth.repo; st.branch = auth.branch;
-    return gh("/user").then(function (u) {
-      st.user = u;
-      return gh("/repos/" + st.owner + "/" + st.repo);
+  function connect() {
+    st.mode = "nube";
+    return api("sesion").then(function (r) {
+      st.email = r.email;
+      return api("contenido");
     }).then(function (r) {
-      if (r.permissions && r.permissions.push === false) { var e = new Error("Tu cuenta de GitHub no tiene permiso de escritura en " + r.full_name + "."); throw e; }
-      if (!auth.branch) { st.branch = r.default_branch; }
-      return findDataFile();
-    }).then(function () {
-      if (remember) { store(LS_AUTH, {token: st.token, owner: st.owner, repo: st.repo, branch: st.branch}); }
-      else { try { sessionStorage.setItem(LS_AUTH, JSON.stringify({token: st.token, owner: st.owner, repo: st.repo, branch: st.branch})); } catch (e) {} }
-      return loadRemote();
-    });
-  }
-  function findDataFile() {
-    var tries = ["", "redroom/"];
-    function next(i) {
-      if (i >= tries.length) {
-        return gh("/repos/" + st.owner + "/" + st.repo + "/git/trees/" + encodeURIComponent(st.branch) + "?recursive=1").then(function (t) {
-          var hit = (t.tree || []).filter(function (x) { return /(^|\/)data\/contenido\.js$/.test(x.path); })[0];
-          if (!hit) { var e = new Error("NO_DATA"); e.code = "NO_DATA"; throw e; }
-          st.base = hit.path.replace(/data\/contenido\.js$/, "");
-        });
-      }
-      return ghRead(tries[i] + DATA_FILE).then(function () { st.base = tries[i]; }, function (e) { if (e.status === 404) { return next(i + 1); } throw e; });
-    }
-    return next(0);
-  }
-  function loadRemote() {
-    return ghRead(st.base + DATA_FILE).then(function (f) {
-      var src = b64dec(f.content), d = parseData(src);
-      st.sha = f.sha; st.published = JSON.stringify(d); st.data = d;
+      st.data = r.data; st.sha = r.ver; st.published = JSON.stringify(r.data);
       return recoverWork();
     });
   }
@@ -186,10 +147,7 @@
       [{label: "Descartar", value: false, cls: "btn--danger"}, {label: "Recuperar cambios", value: true, cls: "btn--primary"}]
     ).then(function (ok) { if (ok) { st.data = w.data; } else { store(LS_WORK, null); } });
   }
-  function logout() {
-    store(LS_AUTH, null); try { sessionStorage.removeItem(LS_AUTH); } catch (e) {}
-    st.token = ""; st.mode = null; st.data = null; location.hash = ""; renderLogin();
-  }
+  function logout() { location.href = "/cdn-cgi/access/logout"; }
 
   /* ================= Cambios, publicar, vista previa ================= */
   function isDirty() { return st.data && JSON.stringify(st.data) !== st.published; }
@@ -216,29 +174,27 @@
     var errs = validar(st.data);
     if (errs.length) { return modal("Revisa antes de publicar", h("ul", {}, errs.map(function (e) { return h("li", {text: e}); })), [{label: "Entendido", value: 0, cls: "btn--primary"}]); }
     if (st.mode === "local") { return download(); }
-    var msgIn = h("input", {class: "input", value: "Actualiza contenido desde el panel", maxlength: 120});
+    var msgIn = h("input", {class: "input", value: "Actualiza contenido", maxlength: 120});
     return modal("Publicar cambios", h("div", {class: "field"}, h("span", {text: "Descripción del cambio (queda en el historial)"}), msgIn,
-      h("small", {text: "Se guardará en GitHub y Cloudflare actualizará la web en 1–2 minutos."})),
+      h("small", {text: "Los cambios se verán en la web en unos segundos."})),
       [{label: "Cancelar", value: false}, {label: "Publicar", value: true, cls: "btn--primary"}]
     ).then(function (ok) {
       if (!ok) { return; }
       var pb = $("#publish"); if (pb) { pb.disabled = true; pb.textContent = "Publicando…"; }
-      return doPublish(msgIn.value || "Actualiza contenido desde el panel", st.sha).then(null, function (e) {
-        if (e.status === 409 || e.status === 422) {
-          return ghRead(st.base + DATA_FILE).then(function (f) {
-            return confirmar("Alguien publicó antes que tú", "Mientras editabas se publicó otra versión del contenido. Si continúas, tus cambios la reemplazan por completo.", "Reemplazar con mis cambios")
-              .then(function (yes) { if (yes) { return doPublish(msgIn.value, f.sha); } });
-          });
+      return doPublish(msgIn.value || "Actualiza contenido", false).then(null, function (e) {
+        if (e.code === "CONFLICT") {
+          return confirmar("Alguien publicó antes que tú", "Mientras editabas se publicó otra versión del contenido. Si continúas, tus cambios la reemplazan por completo.", "Reemplazar con mis cambios")
+            .then(function (yes) { if (yes) { return doPublish(msgIn.value, true); } });
         }
         throw e;
       }).catch(function (e) { toast(explain(e), "error"); }).then(function () { if (pb) { pb.textContent = "Publicar cambios"; } changed(); });
     });
   }
-  function doPublish(msg, sha) {
+  function doPublish(msg, forzar) {
     var snapshot = JSON.stringify(st.data);
-    return ghWrite(st.base + DATA_FILE, b64enc(serialize(st.data)), msg, sha).then(function (r) {
-      st.sha = r.content.sha; st.published = snapshot; store(LS_WORK, null); changed();
-      toast("Publicado. La web se actualiza en 1–2 minutos.", "ok");
+    return api("contenido", {method: "PUT", body: {data: st.data, base: st.sha, mensaje: msg, forzar: !!forzar}}).then(function (r) {
+      st.sha = r.ver; st.published = snapshot; store(LS_WORK, null); changed();
+      toast("Publicado. Ya está en la web.", "ok");
     });
   }
   function download() {
@@ -278,15 +234,17 @@
     });
   }
   function uploadImage() {
-    if (st.mode !== "github") { toast("En modo sin conexión no se pueden subir imágenes. Pega el enlace de una imagen o entra con GitHub.", "error"); return Promise.resolve(null); }
+    if (st.mode !== "nube") { toast("En modo sin conexión no se pueden subir imágenes. Pega el enlace de una imagen.", "error"); return Promise.resolve(null); }
     return pickImage().then(function (file) {
       if (!file) { return null; }
+      if (!/^image\//.test(file.type)) { toast("Elige un archivo de imagen.", "error"); return null; }
       if (file.size > 25 * 1024 * 1024) { toast("La imagen pesa más de 25 MB.", "error"); return null; }
       toast("Subiendo imagen…");
       return shrink(file, 2000).then(function (r) {
-        var name = UPLOAD_DIR + hoy() + "-" + slug(file.name.replace(/\.[^.]+$/, "")) + "-" + Math.random().toString(36).slice(2, 6) + "." + r.ext;
-        return ghWrite(st.base + name, r.dataUrl.split(",")[1], "Sube imagen " + name.split("/").pop()).then(function () {
-          st.imgCache[name] = r.dataUrl; toast("Imagen subida. Recuerda publicar los cambios.", "ok"); return name;
+        return fetch(r.dataUrl).then(function (x) { return x.blob(); }).then(function (blob) {
+          return api("subir", {method: "POST", body: blob, headers: {"Content-Type": blob.type, "X-Nombre": slug(file.name.replace(/\.[^.]+$/, ""))}});
+        }).then(function (res) {
+          st.imgCache[res.path] = r.dataUrl; toast("Imagen subida. Recuerda publicar los cambios.", "ok"); return res.path;
         });
       });
     }).catch(function (e) { toast(explain(e), "error"); return null; });
@@ -422,42 +380,28 @@
     draw(); return box;
   }
 
-  /* ================= Pantalla de ingreso ================= */
-  function renderLogin(err) {
-    var saved = load(LS_AUTH) || {}, root = $("#root"); root.innerHTML = "";
-    var tok = h("input", {class: "input", type: "password", autocomplete: "off", placeholder: "github_pat_…", required: true, value: saved.token || ""});
-    var own = h("input", {class: "input", value: saved.owner || REPO_DEFAULT.owner, "aria-label": "Usuario u organización"});
-    var rep = h("input", {class: "input", value: saved.repo || REPO_DEFAULT.repo, "aria-label": "Repositorio"});
-    var br = h("input", {class: "input", value: saved.branch || REPO_DEFAULT.branch, "aria-label": "Rama"});
-    var rem = h("input", {type: "checkbox", checked: true});
-    var msg = h("p", {class: "form-error", role: "alert", text: err || ""});
-    var btn = h("button", {class: "btn btn--primary", type: "submit"}, "Entrar con GitHub");
-    var f = h("form", {onsubmit: function (e) {
-      e.preventDefault(); msg.textContent = ""; btn.disabled = true; btn.textContent = "Verificando…";
-      login({token: tok.value.trim(), owner: own.value.trim(), repo: rep.value.trim(), branch: br.value.trim()}, rem.checked).then(boot, function (e2) {
-        btn.disabled = false; btn.textContent = "Entrar con GitHub";
-        msg.textContent = e2.code === "NO_DATA" ? "Entraste, pero el repositorio todavía no tiene data/contenido.js. Sube primero esta versión del sitio (con las carpetas data/ y admin/) y vuelve a entrar." : explain(e2);
-      });
-    }},
-      h("label", {class: "field"}, h("span", {text: "Token de GitHub"}), tok, h("small", {text: "Solo funciona si tu cuenta tiene permiso de escritura en el repositorio."})),
-      h("details", {}, h("summary", {}, "Repositorio: " + own.value + "/" + rep.value), h("div", {class: "row3"}, own, rep, br)),
-      h("label", {class: "check"}, rem, h("span", {text: "Recordar en este equipo"})),
-      msg, btn);
-    root.appendChild(h("div", {class: "login"}, h("div", {class: "login__box"},
-      h("div", {}, h("p", {class: "mono muted", text: "Panel de administración"}), h("div", {class: "login__brand", html: "RED<span>ROOM</span>"})),
-      f,
-      h("div", {class: "help"},
-        h("b", {text: "¿Primera vez? Crea tu token (2 minutos):"}),
-        h("ol", {html:
-          "<li>Abre <a href=\"https://github.com/settings/personal-access-tokens/new\" target=\"_blank\" rel=\"noopener\">GitHub → Fine-grained token</a>.</li>" +
-          "<li>Nombre: <b>Panel Redroom</b>. Expiración: la que prefieras.</li>" +
-          "<li>Repository access: <b>Only select repositories</b> → <b>" + REPO_DEFAULT.repo + "</b>.</li>" +
-          "<li>Permissions → Repository → <b>Contents: Read and write</b>.</li>" +
-          "<li>Genera el token, cópialo y pégalo arriba.</li>"}),
-        h("p", {class: "muted", style: {marginTop: "10px"}, text: "Usa «Recordar» solo en tu propio computador. Para dar acceso a alguien más, agrégalo como colaborador del repositorio y que cree su propio token."})),
-      h("button", {class: "btn btn--ghost", type: "button", onclick: function () { loadLocal().then(boot, function (e) { msg.textContent = e.message; }); }}, "Trabajar sin conexión (descarga el archivo)")
-    )));
-    (saved.token ? btn : tok).focus();
+  /* ================= Pantalla de acceso =================
+     Normalmente no se ve: Cloudflare Access pide el correo antes de cargar /admin.
+     Aparece si Access aún no está configurado, si la sesión venció o si el panel se abre sin servidor. */
+  function renderAccess(e) {
+    var root = $("#root"); root.innerHTML = "";
+    var code = e && e.code, box = h("div", {class: "login__box"},
+      h("div", {}, h("p", {class: "mono muted", text: "Panel de administración"}), h("div", {class: "login__brand", html: "RED<span>ROOM</span>"})));
+    if (code === "NO_CONFIG") {
+      box.appendChild(h("div", {class: "help"}, h("b", {text: "Falta activar el ingreso con correo"}),
+        h("p", {class: "muted", style: {marginTop: "8px"}, text: "El panel está instalado, pero aún no tiene la lista de correos autorizados. Sigue LEEME-PANEL.md, paso «Activar el ingreso con correo»."})));
+    } else if (code === "NO_LOGIN" || code === "BAD_TOKEN") {
+      box.appendChild(h("div", {class: "help"}, h("b", {text: "Entra con tu correo"}),
+        h("p", {class: "muted", style: {marginTop: "8px"}, text: "Tu sesión venció o todavía no entras. Presiona Entrar: te pedirán tu correo y te llegará un código. Solo funcionan los correos autorizados."}),
+        h("a", {class: "btn btn--primary", href: location.pathname + "?entrar=" + Date.now()}, "Entrar")));
+    } else if (e) {
+      box.appendChild(h("div", {class: "help"}, h("b", {text: "No pude conectar con el servidor"}),
+        h("p", {class: "muted", style: {marginTop: "8px"}, text: code === "NO_API" ? "Estás abriendo el panel desde tu computador o el servidor aún no se actualiza. Puedes trabajar sin conexión y descargar el archivo." : explain(e)})));
+    }
+    var msg = h("p", {class: "form-error", role: "alert"});
+    box.appendChild(msg);
+    box.appendChild(h("button", {class: "btn btn--ghost", type: "button", onclick: function () { loadLocal().then(boot, function (er) { msg.textContent = er.message; }); }}, "Trabajar sin conexión (descarga el archivo)"));
+    root.appendChild(h("div", {class: "login"}, box));
   }
 
   /* ================= Estructura del panel ================= */
@@ -478,8 +422,8 @@
     var side = h("nav", {class: "adm-side", "aria-label": "Secciones del panel"},
       h("div", {class: "adm-side__brand", html: "RED<span>ROOM</span>"}),
       NAV.map(function (g) { return [h("div", {class: "adm-side__group", text: g[0]}), g[1].map(function (r) { return h("a", {href: "#/" + r[0], class: st.route === r[0] ? "active" : null, onclick: function () { side.classList.remove("is-open"); }}, r[1]); })]; }),
-      h("div", {class: "adm-side__user"}, st.user ? h("img", {src: st.user.avatar_url, alt: ""}) : null,
-        h("span", {}, st.mode === "local" ? "Sin conexión" : (st.user ? st.user.login : ""), h("br"), h("small", {class: "faint", text: st.mode === "local" ? "Publicar = descargar" : st.owner + "/" + st.repo}))));
+      h("div", {class: "adm-side__user"},
+        h("span", {style: {minWidth: 0, overflow: "hidden", textOverflow: "ellipsis"}}, st.mode === "local" ? "Sin conexión" : st.email, h("br"), h("small", {class: "faint", text: st.mode === "local" ? "Publicar = descargar" : "Guardado en Cloudflare"}))));
     var title = (NAV.reduce(function (a, g) { return a.concat(g[1]); }, []).filter(function (r) { return r[0] === st.route; })[0] || ["", ""])[1];
     var top = h("header", {class: "adm-top"},
       h("button", {class: "btn btn--sm menu-btn", type: "button", onclick: function () { side.classList.toggle("is-open"); }}, "Menú"),
@@ -503,7 +447,7 @@
   var VIEWS = {};
   VIEWS.inicio = function (main) {
     var d = st.data, pr = d.proyectos || [], nodos = (d.mapa || {}).nodos || [];
-    head(main, "Hola" + (st.user && st.user.name ? ", " + st.user.name.split(" ")[0] : ""), "Desde aquí cambias todo el sitio sin tocar código. Edita, revisa con <b>Vista previa</b> y cuando esté listo presiona <b>Publicar cambios</b>.");
+    head(main, "Hola", "Desde aquí cambias todo el sitio sin tocar código. Edita, revisa con <b>Vista previa</b> y cuando esté listo presiona <b>Publicar cambios</b>.");
     if (st.mode === "local") { main.appendChild(h("p", {class: "adm-note", html: "<b>Modo sin conexión.</b> Tus cambios se guardan en este navegador. «Descargar contenido.js» te entrega el archivo para reemplazar <code>data/contenido.js</code> y subirlo a GitHub a mano."})); main.appendChild(h("br")); }
     main.appendChild(h("div", {class: "adm-stats"},
       [[pr.filter(function (p) { return p.visible !== false; }).length, "videos publicados", "portafolio"], [nodos.length, "puntos en el mapa", "mapa"], [((d.paginas.commercial || {}).servicios || []).length + ((d.paginas.artistic || {}).servicios || []).length, "servicios", "servicios"], [((d.paginas.about || {}).equipo || []).length, "personas en el equipo", "equipo"]]
@@ -845,18 +789,19 @@
   };
 
   VIEWS.historial = function (main) {
-    head(main, "Historial de versiones", "Cada publicación queda guardada. Puedes cargar una versión anterior, revisarla y volver a publicarla.");
-    if (st.mode !== "github") { main.appendChild(h("p", {class: "adm-note", text: "El historial necesita conexión con GitHub."})); return; }
+    head(main, "Historial de versiones", "Cada publicación queda guardada (las últimas 40). Puedes cargar una versión anterior, revisarla y volver a publicarla.");
+    if (st.mode !== "nube") { main.appendChild(h("p", {class: "adm-note", text: "El historial necesita conexión."})); return; }
     var box = h("div", {class: "adm-panel"}, h("p", {class: "muted", text: "Cargando…"})); main.appendChild(box);
-    gh("/repos/" + st.owner + "/" + st.repo + "/commits?path=" + encodeURIComponent(st.base + DATA_FILE) + "&sha=" + encodeURIComponent(st.branch) + "&per_page=30").then(function (list) {
+    api("historial").then(function (r) {
       box.innerHTML = "";
+      if (!r.items.length) { box.appendChild(h("p", {class: "muted", text: "Todavía no hay publicaciones desde el panel. La versión actual es la original del sitio."})); return; }
       box.appendChild(h("table", {class: "adm-table"}, h("thead", {}, h("tr", {}, h("th", {text: "Fecha"}), h("th", {text: "Cambio"}), h("th", {text: "Quién"}), h("th", {}))),
-        h("tbody", {}, list.map(function (c, i) {
-          return h("tr", {}, h("td", {text: new Date(c.commit.author.date).toLocaleString("es-CL")}), h("td", {text: c.commit.message.split("\n")[0]}), h("td", {text: (c.author && c.author.login) || c.commit.author.name}),
+        h("tbody", {}, r.items.map(function (c, i) {
+          return h("tr", {}, h("td", {text: new Date(c.ts).toLocaleString("es-CL")}), h("td", {text: c.mensaje || "—"}), h("td", {text: c.email}),
             h("td", {}, i === 0 ? h("span", {class: "pill pill--ok", text: "Actual"}) : h("button", {type: "button", class: "btn btn--sm", onclick: function () {
               confirmar("Cargar esta versión", "Se carga en el panel como cambios sin publicar. Revísala y presiona Publicar para dejarla en la web.", "Cargar").then(function (ok) {
                 if (!ok) { return; }
-                ghRead(st.base + DATA_FILE, c.sha).then(function (f) { st.data = parseData(b64dec(f.content)); changed(); toast("Versión cargada. Publica para dejarla en la web.", "ok"); location.hash = "#/inicio"; }).catch(function (e) { toast(explain(e), "error"); });
+                api("historial/" + c.v).then(function (v) { st.data = v.data; changed(); toast("Versión cargada. Publica para dejarla en la web.", "ok"); location.hash = "#/inicio"; }).catch(function (e) { toast(explain(e), "error"); });
               });
             }}, "Cargar")));
         }))));
@@ -885,21 +830,16 @@
   VIEWS.cuenta = function (main) {
     head(main, "Cuenta", "");
     main.appendChild(h("div", {class: "adm-panel"},
-      st.mode === "github" ? h("div", {},
-        h("p", {}, "Conectado como ", h("b", {text: st.user ? st.user.login : "?"}), " al repositorio ", h("b", {text: st.owner + "/" + st.repo}), " (rama ", h("b", {text: st.branch}), ")."),
-        h("p", {class: "muted", text: "Archivo de contenido: " + st.base + DATA_FILE + " · imágenes en " + st.base + UPLOAD_DIR}),
-        h("p", {class: "adm-note", html: "<b>¿Quién puede editar?</b> Solo quien tenga permiso de escritura en el repositorio. Para sumar a alguien: GitHub → repositorio → Settings → Collaborators → Add people. Esa persona crea su propio token y entra aquí."}))
+      st.mode === "nube" ? h("div", {},
+        h("p", {}, "Entraste como ", h("b", {text: st.email}), "."),
+        h("p", {class: "adm-note", html: "<b>¿Quién puede entrar?</b> Los correos de la lista de Cloudflare Access. Para sumar o quitar a alguien: Cloudflare → <b>Zero Trust</b> → <b>Access controls</b> → <b>Applications</b> → <b>Panel Redroom</b> → edita la política con la lista de correos."}))
         : h("p", {text: "Modo sin conexión. Publicar descarga el archivo contenido.js."}),
       h("div", {class: "adm-actions"}, h("button", {type: "button", class: "btn btn--danger", onclick: function () {
-        (isDirty() ? confirmar("Cerrar sesión", "Tienes cambios sin publicar. Quedan guardados en este equipo para la próxima vez.", "Cerrar sesión") : Promise.resolve(true)).then(function (ok) { if (ok) { logout(); } });
-      }}, "Cerrar sesión y olvidar token"))));
+        (isDirty() ? confirmar("Cerrar sesión", "Tienes cambios sin publicar. Quedan guardados en este equipo para la próxima vez.", "Cerrar sesión") : Promise.resolve(true)).then(function (ok) { if (ok) { if (st.mode === "nube") { logout(); } else { location.reload(); } } });
+      }}, st.mode === "nube" ? "Cerrar sesión" : "Salir"))));
   };
 
   /* ================= Arranque ================= */
-  (function start() {
-    var a = load(LS_AUTH); if (!a) { try { a = JSON.parse(sessionStorage.getItem(LS_AUTH) || "null"); } catch (e) {} }
-    if (a && a.token) {
-      login(a, !!load(LS_AUTH)).then(boot, function (e) { renderLogin(e.code === "NO_DATA" ? "El repositorio no tiene data/contenido.js todavía." : explain(e)); });
-    } else { renderLogin(); }
-  })();
+  if (location.protocol === "file:") { renderAccess({code: "NO_API"}); }
+  else { connect().then(boot, function (e) { renderAccess(e); }); }
 })();

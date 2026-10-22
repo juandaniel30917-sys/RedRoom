@@ -1,37 +1,49 @@
 # REDROOM · Panel de administración (/admin)
 
 ```
-redroom/
-  index.html, discover.html, …   ← la web (no cambian al editar contenido)
-  css/  js/                       ← diseño y código
-  data/contenido.js               ← TODO el contenido: textos, videos, mapa, colores, menú, contacto
-  admin/                          ← el panel (tusitio.com/admin)
-  assets/subidas/                 ← fotos que subas desde el panel (se crea sola)
+index.html, discover.html, …   ← la web
+css/  js/                      ← diseño y código
+data/contenido.js              ← contenido ORIGINAL (punto de partida)
+admin/                         ← el panel (tusitio/admin)
+worker/index.js                ← servidor de Cloudflare: guarda lo que publicas y protege la API
+wrangler.jsonc                 ← configuración del Worker (nombre, almacenamiento, Access)
 ```
 
-No usa base de datos. El panel edita `data/contenido.js` directamente en GitHub y Cloudflare vuelve a publicar la web sola (tarda 1–2 minutos).
+- **Quién entra:** solo los correos que tú pongas en Cloudflare Access. Cada persona escribe su correo, le llega un código de 6 dígitos y entra. No hay tokens ni contraseñas.
+- **Dónde se guarda:** en Cloudflare (almacenamiento KV `redroom-contenido`). Al presionar **Publicar cambios** la web cambia en segundos, sin pasar por GitHub.
+- GitHub sigue guardando el **código** del sitio. El contenido editado desde el panel vive en Cloudflare. Respáldalo cuando quieras en *Respaldo y JSON*.
 
-## 1. Subir esta versión al repositorio (una sola vez)
+## Activar el ingreso con correo (una sola vez, ~10 minutos)
 
-Reemplaza los archivos del repo `juandaniel30917-sys/RedRoom` (rama `main`) por los de esta carpeta, incluidas las carpetas nuevas **data/** y **admin/**. Haz commit y push. Cloudflare publica la web nueva.
+1. Entra a https://one.dash.cloudflare.com (Zero Trust). La primera vez te pide un **nombre de equipo** (por ejemplo `redroom`) y elegir el plan **Free** (gratis hasta 50 personas).
+2. Ve a **Access controls → Applications → Create new application → Self-hosted and private**.
+3. Nombre: `Panel Redroom`.
+4. **Add public hostname**:
+   - Subdomain: `redroom`
+   - Domain: tu dominio `….workers.dev` (el mismo de la web)
+   - Path: `admin`
+5. En **Access policies → Create new policy**:
+   - Nombre: `Correos autorizados`, Action: **Allow**
+   - Include → Selector **Emails** → escribe cada correo autorizado.
+6. Métodos de ingreso: deja activado **One-time PIN** (el código por correo).
+7. Guarda la aplicación.
+8. Copia dos datos y envíaselos a Claude (o pégalos tú en `wrangler.jsonc`, en `vars`):
+   - **Application Audience (AUD) Tag**: en la aplicación → *Overview* / *Basic information*.
+   - **Team domain**: en *Settings → Team name and domain*, por ejemplo `https://redroom.cloudflareaccess.com`.
 
-## 2. Crear tu token de GitHub (una sola vez, 2 minutos)
+Cuando esos dos datos están en `wrangler.jsonc` y se publica, el panel queda funcionando en `tusitio/admin`.
 
-1. Abre https://github.com/settings/personal-access-tokens/new
-2. Nombre: `Panel Redroom`. Expiración: la que prefieras (cuando venza, creas otro).
-3. **Repository access → Only select repositories → RedRoom**.
-4. **Permissions → Repository permissions → Contents → Read and write**.
-5. Presiona **Generate token** y copia el código (`github_pat_…`). GitHub no lo vuelve a mostrar.
+## Sumar o quitar personas
 
-## 3. Entrar
+Zero Trust → **Access controls → Applications → Panel Redroom → Policies → Correos autorizados** → agrega o borra correos → Save. Funciona al instante. La persona no necesita cuenta de GitHub ni de Cloudflare.
 
-Abre `https://TU-SITIO/admin`, pega el token y presiona **Entrar con GitHub**.
-Marca «Recordar en este equipo» solo en tu propio computador.
+## Cómo se trabaja
 
-## Quién puede editar
-
-Solo quien tenga **permiso de escritura en el repositorio**. Un visitante que abra `/admin` ve la pantalla de ingreso y nada más; sin token válido no puede cambiar nada.
-Para sumar a alguien (por ejemplo, Aníbal o Víctor): GitHub → RedRoom → Settings → Collaborators → Add people. Esa persona crea su propio token y entra.
+1. Entra a `tusitio/admin`, escribe tu correo y el código que te llega.
+2. Edita en cualquier sección. Arriba aparece **Cambios sin publicar**. Se guardan solos en tu navegador por si cierras la pestaña.
+3. **Vista previa** abre la web con tus cambios (barra roja abajo). Solo tú la ves.
+4. **Publicar cambios** los deja en la web al instante.
+5. **Historial** guarda las últimas 40 publicaciones con quién y cuándo, y permite volver a cualquiera.
 
 ## Qué se puede cambiar desde el panel
 
@@ -41,27 +53,21 @@ Para sumar a alguien (por ejemplo, Aníbal o Víctor): GitHub → RedRoom → Se
 | Mapa interactivo | Puntos (arrastrar, crear con clic, conectar, borrar), tipos de punto, silueta de la región, textos de la página |
 | Textos de las páginas | Títulos, etiquetas y botones de todas las páginas, y los campos de los formularios |
 | Servicios | Bloques de Comercial y Artístico |
-| Nosotros · equipo | Personas, roles, biografías y fotos |
+| Nosotros · equipo | Personas, roles, biografías y fotos (se suben y optimizan solas) |
 | Arma tu proyecto | Pasos, preguntas, opciones y claqueta |
 | Menú | Nombres, orden y páginas visibles |
 | Contacto | Correo, redes, WhatsApp, Formspree (envío directo de formularios) |
 | Diseño | Colores, tipografías, grano, botón rojo, visor, nombre y textos para Google |
 | Sensaciones y Modo Director | Lista de sensaciones y pestañas del Modo Director |
-| Historial | Ver versiones anteriores y volver a cualquiera |
 | Respaldo y JSON | Descargar o restaurar una copia, o editar todo en JSON |
 
 En los títulos, `*asteriscos*` pintan palabras con el color de acento y Enter hace un salto de línea.
 
-## Cómo se trabaja
+## Seguridad
 
-1. Edita en cualquier sección. Arriba aparece **Cambios sin publicar**. Se guardan solos en tu navegador, así que no se pierden si cierras la pestaña.
-2. **Vista previa** abre la web con tus cambios (una barra roja abajo lo indica). Solo tú la ves.
-3. **Publicar cambios** los sube a GitHub y la web se actualiza en 1–2 minutos.
+- Cloudflare Access pide el correo antes de mostrar `/admin`.
+- Además, el Worker comprueba en cada guardado la firma de Cloudflare Access (equipo y AUD). Aunque alguien encontrara la dirección de la API, sin una sesión válida de un correo autorizado no puede cambiar nada.
 
-## Sin internet / sin token
+## Sin internet
 
-En la pantalla de ingreso, **Trabajar sin conexión** abre el panel con el contenido local. «Publicar» descarga `contenido.js`; lo reemplazas en `data/` y lo subes a mano. En este modo no se pueden subir fotos (puedes pegar un link).
-
-## Lo que no cambia desde el panel
-
-El diseño de cada sección y las funciones (código). Eso se sigue editando en `js/main.js` y `css/style.css`.
+Si abres `admin/index.html` desde tu computador, puedes usar **Trabajar sin conexión**: editas y «Publicar» descarga `contenido.js`.

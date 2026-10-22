@@ -1,0 +1,8 @@
+worker
+wrangler.jsonc
+.assetsignore
+LEEME-PANEL.md
+README.md
+.git
+.github
+node_modules

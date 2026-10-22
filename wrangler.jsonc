@@ -1,0 +1,19 @@
+{
+  // REDROOM · configuración del Worker (Cloudflare)
+  "name": "redroom",
+  "main": "worker/index.js",
+  "compatibility_date": "2026-06-01",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/admin/api/*", "/data/contenido.js", "/media/*"]
+  },
+  "kv_namespaces": [
+    { "binding": "RR_KV", "id": "b7098bbac539438fadfc1a70242b1e62" }
+  ],
+  "vars": {
+    // Se completan después de crear la aplicación de Cloudflare Access (ver LEEME-PANEL.md)
+    "TEAM_DOMAIN": "",
+    "POLICY_AUD": ""
+  }
+}
