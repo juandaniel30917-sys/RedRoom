@@ -19,14 +19,16 @@ window.RR_DATA = {
    "titulos": "Bebas Neue",
    "texto": "Inter"
   },
-  "grano": true
+  "grano": true,
+  "ubicacion": "Talca · Región del Maule · Chile",
+  "dominio": "https://redroomchile.cl"
  },
  "contacto": {
-  "email": "CORREO@REDROOM.CL",
-  "instagram": "https://instagram.com/",
-  "youtube": "https://youtube.com/",
+  "email": "",
+  "instagram": "https://www.instagram.com/productoraredroom/",
+  "youtube": "",
   "tiktok": "",
-  "whatsapp": "",
+  "whatsapp": "+56 9 2113 4656",
   "formspree": ""
  },
  "menu": [
@@ -245,31 +247,31 @@ window.RR_DATA = {
   "maule": {
    "tag": "REDROOM MAULE",
    "titulo": "LA RED *VIVA*",
-   "intro": "Cada punto es una persona, banda, emprendimiento, locación o proyecto del Maule. Toca uno y mira con quién se conecta.",
+   "intro": "La red audiovisual que Redroom está construyendo en la Región del Maule: bandas, artistas, emprendimientos, locaciones y proyectos. Cada trabajo que hacemos en la región suma un punto nuevo.",
    "boton": "CONSTRUIR LA RED",
    "botonVolver": "VOLVER A EXPLORAR",
-   "nota": "DEMO: nodos de ejemplo. Cada proyecto realizado agrega una conexión nueva.",
-   "ayuda": "Selecciona un punto para generar su constelación.",
-   "final": "La red completa: así ha crecido Redroom en el Maule."
+   "nota": "¿Tu banda, marca o locación del Maule quiere ser parte de la red? Escríbenos.",
+   "ayuda": "Toca un punto para ver con quién se conecta.",
+   "final": "Así crece Redroom en el Maule."
   },
   "about": {
    "tag": "NOSOTROS",
    "titulo": "REDROOM",
-   "intro": "Redroom nace desde una búsqueda cinematográfica y audiovisual de dos cineastas de la Universidad de Valparaíso.",
+   "intro": "Redroom es una productora audiovisual fundada por Aníbal Castillo y Víctor Quezada, cineastas de la Universidad de Valparaíso. Hacemos cine, videoclips, sesiones en vivo y video comercial con mirada cinematográfica, desde Talca para todo el Maule.",
    "equipo": [
     {
      "nombre": "ANÍBAL CASTILLO",
-     "rol": "Cineasta",
-     "bio": "",
+     "rol": "Cofundador · Cineasta",
+     "bio": "Dirección y cámara",
      "foto": "",
-     "etiqueta": "PLACEHOLDER"
+     "etiqueta": ""
     },
     {
      "nombre": "VÍCTOR QUEZADA",
-     "rol": "Cineasta",
-     "bio": "",
+     "rol": "Cofundador · Cineasta",
+     "bio": "Dirección, cámara, montaje y postproducción",
      "foto": "",
-     "etiqueta": "PLACEHOLDER"
+     "etiqueta": ""
     }
    ]
   },
@@ -1467,258 +1469,15 @@ window.RR_DATA = {
    {
     "id": "rr",
     "t": "R",
-    "n": "REDROOM",
+    "n": "REDROOM (TALCA)",
     "ll": [
      -71.66,
      -35.43
     ],
     "add": "2020-01",
-    "l": [
-     "vc",
-     "lo",
-     "co",
-     "su",
-     "ct",
-     "cm"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "ba",
-    "t": "B",
-    "n": "BANDA DEMO (TALCA)",
-    "ll": [
-     -71.7,
-     -35.4
-    ],
-    "add": "2021-03",
-    "l": [
-     "vc"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "vc",
-    "t": "J",
-    "n": "VIDEOCLIP DEMO",
-    "ll": [
-     -71.62,
-     -35.47
-    ],
-    "add": "2021-05",
-    "l": [
-     "ba",
-     "rr"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "lo",
-    "t": "L",
-    "n": "LOCACIÓN DEMO (SAN JAVIER)",
-    "ll": [
-     -71.73,
-     -35.6
-    ],
-    "add": "2021-05",
-    "l": [
-     "rr",
-     "fo"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "fo",
-    "t": "P",
-    "n": "FOTÓGRAFO DEMO",
-    "ll": [
-     -71.24,
-     -34.98
-    ],
-    "add": "2022-02",
-    "l": [
-     "lo",
-     "ev"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "ev",
-    "t": "C",
-    "n": "EVENTO DEMO",
-    "ll": [
-     -71.45,
-     -35.2
-    ],
-    "add": "2022-09",
-    "l": [
-     "fo",
-     "em"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "em",
-    "t": "E",
-    "n": "EMPRENDIMIENTO DEMO (LINARES)",
-    "ll": [
-     -71.6,
-     -35.85
-    ],
-    "add": "2022-09",
-    "l": [
-     "ev"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "ar",
-    "t": "P",
-    "n": "ARTISTA DEMO (CAUQUENES)",
-    "ll": [
-     -72.32,
-     -35.97
-    ],
-    "add": "2023-01",
-    "l": [
-     "co",
-     "cl"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "co",
-    "t": "J",
-    "n": "CORTOMETRAJE DEMO",
-    "ll": [
-     -72,
-     -35.7
-    ],
-    "add": "2023-04",
-    "l": [
-     "rr",
-     "ar"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "b2",
-    "t": "B",
-    "n": "BANDA DEMO (CONSTITUCIÓN)",
-    "ll": [
-     -72.42,
-     -35.33
-    ],
-    "add": "2023-08",
-    "l": [
-     "su"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "su",
-    "t": "J",
-    "n": "SESIÓN EN VIVO DEMO",
-    "ll": [
-     -72.05,
-     -35.25
-    ],
-    "add": "2023-08",
-    "l": [
-     "b2",
-     "rr",
-     "l2"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "l2",
-    "t": "L",
-    "n": "LOCACIÓN DEMO (CORDILLERA)",
-    "ll": [
-     -70.8,
-     -35.45
-    ],
-    "add": "2024-02",
-    "l": [
-     "su"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "ma",
-    "t": "E",
-    "n": "MARCA DEMO (MOLINA)",
-    "ll": [
-     -71.28,
-     -35.12
-    ],
-    "add": "2024-06",
-    "l": [
-     "ct"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "ct",
-    "t": "J",
-    "n": "VIDEO CORPORATIVO DEMO",
-    "ll": [
-     -71.5,
-     -35.3
-    ],
-    "add": "2024-06",
-    "l": [
-     "rr",
-     "ma"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "cl",
-    "t": "C",
-    "n": "COLABORACIÓN DEMO (PARRAL)",
-    "ll": [
-     -71.83,
-     -36.14
-    ],
-    "add": "2025-01",
-    "l": [
-     "ar",
-     "cm"
-    ],
-    "desc": "",
-    "link": ""
-   },
-   {
-    "id": "cm",
-    "t": "J",
-    "n": "PROYECTO NUEVO DEMO",
-    "ll": [
-     -71.9,
-     -35.9
-    ],
-    "add": "2025-05",
-    "l": [
-     "rr",
-     "cl"
-    ],
-    "desc": "",
-    "link": ""
+    "l": [],
+    "desc": "Productora audiovisual con base en Talca.",
+    "link": "https://www.instagram.com/productoraredroom/"
    }
   ],
   "contorno": [

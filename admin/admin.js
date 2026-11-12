@@ -463,6 +463,7 @@
         .map(function (t) { return h("a", {class: "adm-task", href: "#/" + t[0]}, h("i", {text: "→"}), h("b", {text: t[1]}), h("span", {text: t[2]})); })));
     var placeholders = [];
     if (/CORREO@/i.test((d.contacto || {}).email || "")) { placeholders.push(["contacto", "El correo de contacto todavía es de ejemplo."]); }
+    if (!(d.contacto || {}).email && !(d.contacto || {}).formspree) { placeholders.push(["contacto", "No hay correo ni Formspree: los formularios se envían por WhatsApp. Agrega un correo si prefieres recibirlos por mail."]); }
     if (nodos.some(function (n) { return /DEMO/i.test(n.n); })) { placeholders.push(["mapa", "El mapa tiene puntos DEMO de ejemplo."]); }
     if (((d.paginas.about || {}).equipo || []).some(function (m) { return !m.foto; })) { placeholders.push(["equipo", "Faltan fotos del equipo."]); }
     if (placeholders.length) {

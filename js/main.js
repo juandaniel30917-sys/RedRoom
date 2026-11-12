@@ -31,7 +31,8 @@ var MAPA = D.mapa || {};
 var NET_TYPES = {}; (MAPA.tipos || []).forEach(function (t) { NET_TYPES[t.clave] = t.nombre; });
 var NET = (MAPA.nodos || []).map(function (n) { return Object.assign({}, n, {l: (n.l || []).slice()}); });
 var MAULE_OUTLINE = MAPA.contorno || [];
-var MENU = (D.menu || []).filter(function (m) { return m.visible !== false; });
+var HAS_MOODS = (D.proyectos || []).some(function (p) { return p.visible !== false && (p.mood || []).length; });
+var MENU = (D.menu || []).filter(function (m) { return m.visible !== false && (HAS_MOODS || m.pagina !== "mood"); });
 var DIRECTOR_MODES = {}, DIRECTOR_KEYS = {};
 (D.modoDirector || []).forEach(function (m) { DIRECTOR_MODES[m.nombre] = m.descripcion; DIRECTOR_KEYS[m.nombre] = m.palabras || []; });
 var DM_FIRST = Object.keys(DIRECTOR_MODES)[0] || "";
@@ -61,18 +62,33 @@ var CTA = '<a class="btn" href="build.html">' + esc(BT.cotizar || "SOLICITAR COT
 })();
 function cssVar(n, d) { var v = getComputedStyle(document.documentElement).getPropertyValue(n).trim(); return v || d; }
 
-/* envío: si hay un formulario de Formspree configurado se envía ahí; si no, abre el correo (mailto). */
+/* ---- Contacto: WhatsApp, teléfono, Instagram y correo ---- */
+var WA_NUM = String(C.whatsapp || "").replace(/\D/g, "");
+function waLink(text) { return WA_NUM ? "https://wa.me/" + WA_NUM + (text ? "?text=" + encodeURIComponent(text) : "") : ""; }
+function telLink() { return WA_NUM ? "tel:+" + WA_NUM : ""; }
+function igHandle(url) { var m = String(url || "").match(/instagram\.com\/([\w.]+)/i); return m ? "@" + m[1] : "INSTAGRAM"; }
+
+/* Envío de formularios: Formspree si está configurado; si no, correo (mailto); si no hay correo, WhatsApp con el mensaje listo. */
 function submitForm(subject, body, done) {
+  function fallback() {
+    if (C.email) { location.href = mailto(subject, body); return; }
+    if (WA_NUM) {
+      var u = waLink("*" + subject + "*\n\n" + body), w = window.open(u, "_blank");
+      if (w) { try { w.opener = null; } catch (e) {} } else { location.href = u; }
+      if (done) { done("wa"); }
+    }
+  }
   if (C.formspree) {
     var url = /^https?:/.test(C.formspree) ? C.formspree : "https://formspree.io/f/" + C.formspree;
     fetch(url, {method: "POST", headers: {"Accept": "application/json", "Content-Type": "application/json"}, body: JSON.stringify({_subject: subject, mensaje: body})})
       .then(function (r) { if (!r.ok) { throw 0; } if (done) { done(true); } })
-      .catch(function () { location.href = mailto(subject, body); });
+      .catch(fallback);
     return;
   }
-  location.href = mailto(subject, body);
+  fallback();
 }
 function mailto(subject, body) { return "mailto:" + (C.email || "") + "?subject=" + encodeURIComponent(subject) + "&body=" + encodeURIComponent(body); }
+function sentMsg(how) { return how === "wa" ? "<p>Se abrió WhatsApp con tu mensaje listo. Solo presiona enviar y te responderemos pronto.</p>" : "<p>Te responderemos pronto.</p>"; }
 
 /* ---- YouTube: ID, portadas y reproductor ---- */
 function ytId(url) {
@@ -116,11 +132,11 @@ var PAGES = {
     var p = P.discover || {};
     return '<div class="wrap">' + head(p, p.tag) + '<hr class="line rv"></div>' +
       section(p.destacadosTitulo, p.destacadosTag, '<div class="grid">' + featured().map(card).join("") + '</div><br><a class="btn" href="work.html">' + esc(p.verTodo) + '</a>') +
-      '<div class="wrap"><hr class="line"><h2 class="rv">' + rt(p.cierre) + '</h2><br><a class="btn" href="mood.html">' + esc(p.botonSensacion) + '</a> <a class="btn" href="build.html">' + esc(p.botonProyecto) + '</a></div>';
+      '<div class="wrap"><hr class="line"><h2 class="rv">' + rt(p.cierre) + '</h2><br>' + (HAS_MOODS ? '<a class="btn" href="mood.html">' + esc(p.botonSensacion) + '</a> ' : '') + '<a class="btn" href="build.html">' + esc(p.botonProyecto) + '</a></div>';
   },
   work: function () {
     var p = P.work || {}, cats = usedCategories();
-    return section(p.titulo, (p.tag || "") + ' · ' + PROJECTS.length + ' VIDEOS', (cats.length > 1 ? chips([p.todos || "TODOS"].concat(cats), p.todos || "TODOS", "data-c") : '') + '<div class="grid" id="g"></div><br><a class="btn" href="mood.html">' + esc(p.boton) + '</a>');
+    return section(p.titulo, (p.tag || "") + ' · ' + PROJECTS.length + ' VIDEOS', (cats.length > 1 ? chips([p.todos || "TODOS"].concat(cats), p.todos || "TODOS", "data-c") : '') + '<div class="grid" id="g"></div><br>' + (HAS_MOODS ? '<a class="btn" href="mood.html">' + esc(p.boton) + '</a> ' : '') + CTA);
   },
   mood: function () {
     var p = P.mood || {}, used = usedMoods();
@@ -131,20 +147,22 @@ var PAGES = {
   build: function () { return '<div class="wrap"><p class="tag">' + esc((P.build || {}).tag) + '</p><div id="b"></div></div>'; },
   maule: function () {
     var p = P.maule || {};
-    return '<div class="wrap">' + head(p, p.tag) + para(p.intro) + '<br><button class="btn" id="bn">' + esc(p.boton) + '</button><canvas id="net" class="net" role="img" aria-label="Red audiovisual del Maule: puntos conectados por líneas"></canvas><div class="two" style="margin-top:1.5rem"><div aria-live="polite"><p class="tag">CONEXIÓN</p><p id="chain">' + esc(p.ayuda) + '</p><div id="ndet"></div></div><div><p class="tag" id="yr">LA RED HOY</p><div id="stats"></div></div></div><div class="chips" id="nlist" aria-label="Lista de puntos de la red"></div>' + (p.nota ? '<p class="tag">' + esc(p.nota) + '</p>' : '') + '<br>' + CTA + '</div>';
+    return '<div class="wrap">' + head(p, p.tag) + para(p.intro) + '<br><button class="btn" id="bn"' + (NET.length > 1 ? '' : ' hidden') + '>' + esc(p.boton) + '</button><canvas id="net" class="net" role="img" aria-label="Red audiovisual del Maule: puntos conectados por líneas"></canvas><div class="two" style="margin-top:1.5rem"><div aria-live="polite"><p class="tag">CONEXIÓN</p><p id="chain">' + esc(p.ayuda) + '</p><div id="ndet"></div></div><div><p class="tag" id="yr">LA RED HOY</p><div id="stats"></div></div></div><div class="chips" id="nlist" aria-label="Lista de puntos de la red"></div>' + (p.nota ? '<p class="tag">' + esc(p.nota) + '</p>' : '') + '<br>' + CTA + ' <a class="btn" href="collaborate.html">' + esc(BT.colaborar || "CREEMOS ALGO JUNTOS") + '</a></div>';
   },
   about: function () {
     var p = P.about || {};
     return '<div class="wrap">' + head(p, p.tag) + para(p.intro) + '<div class="grid">' + (p.equipo || []).map(function (m) {
-      return '<div class="card rv"><i>' + (m.foto ? '<img src="' + esc(m.foto) + '" alt="' + esc(m.nombre) + '" loading="lazy">' : '') + '</i>' + (m.etiqueta ? '<span class="demo">' + esc(m.etiqueta) + '</span>' : '') + '<div><b>' + esc(m.nombre) + '</b><small>' + esc([m.rol, m.bio].filter(Boolean).join(". ")) + '</small></div></div>';
+      var ini = String(m.nombre || "").split(/\s+/).filter(Boolean).slice(0, 2).map(function (w) { return w.charAt(0); }).join("");
+      return '<div class="card rv"><i>' + (m.foto ? '<img src="' + esc(m.foto) + '" alt="' + esc(m.nombre) + '" loading="lazy">' : '<span class="ini" aria-hidden="true">' + esc(ini) + '</span>') + '</i>' + (m.etiqueta ? '<span class="demo">' + esc(m.etiqueta) + '</span>' : '') + '<div><b>' + esc(m.nombre) + '</b><small>' + esc([m.rol, m.bio].filter(Boolean).join(" · ")) + '</small></div></div>';
     }).join("") + '</div><br>' + CTA + '</div>';
   },
   collaborate: function () { var p = P.collaborate || {}; return '<div class="wrap">' + head(p, p.tag) + para(p.intro) + fform("cf", p.campos, p.boton) + '</div>'; },
   contact: function () {
-    var p = P.contact || {}, redes = [["INSTAGRAM", C.instagram], ["YOUTUBE", C.youtube], ["TIKTOK", C.tiktok], ["WHATSAPP", C.whatsapp ? "https://wa.me/" + String(C.whatsapp).replace(/\D/g, "") : ""]].filter(function (r) { return r[1]; });
-    return '<div class="wrap">' + head(p, p.tag) + '<p>' + (C.email ? '<a href="mailto:' + esc(C.email) + '">' + esc(C.email) + '</a>' : '') + redes.map(function (r) { return ' · <a href="' + esc(r[1]) + '" rel="noopener" target="_blank">' + r[0] + '</a>'; }).join("") + '</p>' +
-      fform("ct", p.campos, p.boton) + '<br><h2>' + rt(p.cierre) + '</h2></div>';
+    var p = P.contact || {};
+    return '<div class="wrap">' + head(p, p.tag) + contactList() + (S.ubicacion ? '<p class="tag" style="margin-top:1.5rem">' + esc(S.ubicacion) + '</p>' : '') +
+      '<hr class="line"><p class="tag">ESCRÍBENOS</p>' + fform("ct", p.campos, p.boton) + '<br><h2>' + rt(p.cierre) + '</h2></div>';
   },
+  notfound: function () { return '<div class="wrap"><p class="tag">ERROR 404</p><h1 class="rv">ESTA SALA <span class="red">NO EXISTE.</span></h1><p>La página que buscas se movió o ya no está.</p><br><a class="btn" href="discover.html">VOLVER AL INICIO</a> <a class="btn" href="work.html">VER TRABAJOS</a></div>'; },
   project: function () {
     var t = P.project || {}, id = new URLSearchParams(location.search).get("id");
     var p = byId(id) || PROJECTS[0]; if (!p) { return '<div class="wrap"><h1>SIN TRABAJOS</h1></div>'; }
@@ -156,10 +174,27 @@ var PAGES = {
       '<hr class="line"><div class="pnav">' + (prev ? '<a href="project.html?id=' + esc(prev.id) + '"><small class="tag">← MÁS RECIENTE</small><b>' + esc(prev.title) + '</b></a>' : '<span></span>') + (next ? '<a href="project.html?id=' + esc(next.id) + '" style="text-align:right"><small class="tag">ANTERIOR →</small><b>' + esc(next.title) + '</b></a>' : '') + '</div></div>';
   }
 };
+function contactList() {
+  var rows = [];
+  if (WA_NUM) { rows.push(["WHATSAPP", C.whatsapp, waLink("Hola Redroom, quiero hablar de un proyecto."), 1]); rows.push(["TELÉFONO", C.whatsapp, telLink(), 0]); }
+  if (C.instagram) { rows.push(["INSTAGRAM", igHandle(C.instagram), C.instagram, 1]); }
+  if (C.email) { rows.push(["CORREO", C.email, "mailto:" + C.email, 0]); }
+  if (C.youtube) { rows.push(["YOUTUBE", "Canal de YouTube", C.youtube, 1]); }
+  if (C.tiktok) { rows.push(["TIKTOK", "Perfil de TikTok", C.tiktok, 1]); }
+  return '<dl class="ficha contacto">' + rows.map(function (r) { return '<div><dt>' + r[0] + '</dt><dd><a href="' + esc(r[2]) + '"' + (r[3] ? ' target="_blank" rel="noopener"' : '') + '>' + esc(r[1]) + '</a></dd></div>'; }).join("") + '</dl>';
+}
+function footer() {
+  var y = new Date().getFullYear(), links = [["work", "TRABAJOS"], ["build", "ARMA TU PROYECTO"], ["about", "NOSOTROS"], ["contact", "CONTACTO"]];
+  return '<footer class="foot"><div class="wrap"><div class="fgrid"><div><b class="flogo">' + esc(S.nombre || "REDROOM") + '</b><p>Productora audiovisual' + (S.ubicacion ? '<br>' + esc(S.ubicacion) : '') + '</p></div>' +
+    '<div><p class="tag">CONTACTO</p>' + (WA_NUM ? '<p><a href="' + esc(waLink("Hola Redroom, quiero hablar de un proyecto.")) + '" target="_blank" rel="noopener">WhatsApp ' + esc(C.whatsapp) + '</a></p>' : '') +
+    (C.instagram ? '<p><a href="' + esc(C.instagram) + '" target="_blank" rel="noopener">Instagram ' + esc(igHandle(C.instagram)) + '</a></p>' : '') + (C.email ? '<p><a href="mailto:' + esc(C.email) + '">' + esc(C.email) + '</a></p>' : '') + '</div>' +
+    '<div><p class="tag">EXPLORA</p>' + links.map(function (l) { return '<p><a href="' + l[0] + '.html">' + l[1] + '</a></p>'; }).join("") + '</div></div>' +
+    '<p class="tag fcopy">© ' + y + ' ' + esc(S.nombre || "REDROOM") + ' · TODOS LOS DERECHOS RESERVADOS</p></div></footer>';
+}
 function fform(id, fields, label) {
   return '<form id="' + id + '">' + (fields || []).map(function (f, i) {
     var fid = id + i, lab = esc(f.etiqueta);
-    return '<div><label for="' + fid + '">' + lab.toUpperCase() + '</label>' + (f.largo ? '<textarea id="' + fid + '" name="' + lab + '" rows="4" required></textarea>' : '<input id="' + fid + '" name="' + lab + '"' + (f.correo ? ' type="email"' : '') + ' required>') + '</div>';
+    return '<div><label for="' + fid + '">' + lab.toUpperCase() + '</label>' + (f.largo ? '<textarea id="' + fid + '" name="' + lab + '" rows="4" required></textarea>' : '<input id="' + fid + '" name="' + lab + '"' + (f.correo ? ' type="email" autocomplete="email"' : '') + ' required>') + '</div>';
   }).join("") + '<button class="btn" type="submit">' + esc(label || "ENVIAR") + '</button></form>';
 }
 
@@ -238,7 +273,7 @@ function bindForm(id, subject) {
   f.onsubmit = function (e) {
     e.preventDefault();
     var body = $$("input,textarea", this).map(function (i) { return i.name + ": " + i.value; }).join("\n");
-    submitForm(subject, body, function () { f.innerHTML = '<h2>MENSAJE ENVIADO.</h2><p>Te responderemos pronto.</p>'; });
+    submitForm(subject, body, function (how) { f.innerHTML = '<h2>' + (how === "wa" ? 'MENSAJE <span class="red">LISTO.</span>' : 'MENSAJE ENVIADO.') + '</h2>' + sentMsg(how); });
   };
 }
 
@@ -248,14 +283,14 @@ function buildFlow() {
     if (i >= steps.length) {
       var sum = Object.keys(a).map(function (k) { return k + ": " + a[k]; }).join("\n");
       root.innerHTML = '<h1>' + rt(B.final || "TU PROYECTO ESTÁ LISTO.") + '</h1>' + (B.claqueta !== false ? claqueta(a) : '') + '<pre class="sum">' + esc(sum) + '</pre><button class="btn" id="send">' + esc(B.enviar || "ENVIAR") + '</button> <button class="btn" id="back">' + esc(B.editar || "EDITAR") + '</button>';
-      $("#send").onclick = function () { submitForm(B.asunto || "Solicitud de cotización", sum, function () { root.innerHTML = '<h1>PROYECTO <span class="red">ENVIADO.</span></h1><p>Te responderemos pronto.</p>'; }); };
+      $("#send").onclick = function () { submitForm(B.asunto || "Solicitud de cotización", sum, function (how) { root.innerHTML = '<h1>PROYECTO <span class="red">' + (how === "wa" ? 'LISTO.' : 'ENVIADO.') + '</span></h1>' + sentMsg(how); }); };
       $("#back").onclick = function () { i = 0; show(); };
       return;
     }
     var s = steps[i], h = '<p class="tag">PASO ' + (i + 1) + ' / ' + steps.length + '</p><h1>' + rt(s.pregunta) + '</h1>';
     if (s.tipo === "opciones") { h += '<div class="opt">' + (s.opciones || []).map(function (o) { return '<button class="btn' + (a[s.clave] === o ? ' on' : '') + '" data-o="' + esc(o) + '">' + esc(o) + '</button>'; }).join("") + '</div>'; }
     else if (s.tipo === "texto") { h += '<form id="st"><textarea aria-label="' + esc(s.clave) + '" id="v" rows="5">' + esc(a[s.clave] || "") + '</textarea><button class="btn" type="submit">SIGUIENTE</button></form>'; }
-    else { h += '<form id="st">' + [["Nombre", "n", 1], ["Correo", "e", 1], ["Teléfono", "p", 1], ["Instagram (opcional)", "i", 0]].map(function (f) { return '<div><label for="' + f[1] + '">' + f[0].toUpperCase() + '</label><input id="' + f[1] + '"' + (f[1] === "e" ? ' type="email"' : '') + (f[2] ? ' required' : '') + '></div>'; }).join("") + '<button class="btn" type="submit">TERMINAR</button></form>'; }
+    else { h += '<form id="st">' + [["Nombre", "n", 1], ["Correo", "e", 1], ["Teléfono / WhatsApp", "p", 1], ["Instagram (opcional)", "i", 0]].map(function (f) { return '<div><label for="' + f[1] + '">' + f[0].toUpperCase() + '</label><input id="' + f[1] + '"' + (f[1] === "e" ? ' type="email" autocomplete="email"' : f[1] === "p" ? ' type="tel" autocomplete="tel"' : f[1] === "n" ? ' autocomplete="name"' : '') + (f[2] ? ' required' : '') + '></div>'; }).join("") + '<button class="btn" type="submit">TERMINAR</button></form>'; }
     h += i ? '<br><button class="btn" id="prev">ATRÁS</button>' : '';
     root.innerHTML = h;
     $$("[data-o]").forEach(function (b) { b.onclick = function () { a[s.clave] = b.dataset.o; i++; show(); }; });
@@ -307,6 +342,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (page === "index") { return enterRoom(); }
   chrome();
   $("#app").innerHTML = PAGES[page] ? PAGES[page]() : "";
+  $("#app").insertAdjacentHTML("afterend", footer());
   if (INIT[page]) { INIT[page](); }
   var io = "IntersectionObserver" in window ? new IntersectionObserver(function (es) { es.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); io.unobserve(e.target); } }); }, {threshold: .15}) : null;
   $$(".rv").forEach(function (e) { io ? io.observe(e) : e.classList.add("in"); });
@@ -363,8 +399,8 @@ function netInit() {
     var cnt = {}, k, e = 0, h = "";
     NET.forEach(function (n) { if (vis[n.id]) { cnt[n.t] = (cnt[n.t] || 0) + 1; } });
     E.forEach(function (x) { if (vis[x.a.id] && vis[x.b.id] && (!building || x.t0 !== null)) { e++; } });
-    for (k in NET_TYPES) { h += '<p><b class="red">' + (cnt[k] || 0) + '</b> ' + esc(NET_TYPES[k]) + '</p>'; }
-    $("#stats").innerHTML = h + '<p><b class="red">' + e + '</b> CONEXIONES</p>';
+    for (k in NET_TYPES) { if (!cnt[k]) { continue; } h += '<p><b class="red">' + (cnt[k] || 0) + '</b> ' + esc(NET_TYPES[k]) + '</p>'; }
+    $("#stats").innerHTML = h + (E.length ? '<p><b class="red">' + e + '</b> CONEXIONES</p>' : '');
   }
   function select(n) {
     sel = n; lev = {}; lev[n.id] = 0; var q = [n], lines = [];

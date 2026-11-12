@@ -1,4 +1,4 @@
-:root{--ft:var(--ft);--fb:'Inter';--bg:#050505;--g1:#141414;--g2:#2a2a2a;--g3:#8a8a8a;--fg:#f2f2f2;--red:#e10600}
+:root{--ft:'Bebas Neue';--fb:'Inter';--bg:#050505;--g1:#141414;--g2:#2a2a2a;--g3:#8a8a8a;--fg:#f2f2f2;--red:#e10600}
 *{box-sizing:border-box;margin:0}html{scroll-behavior:smooth}
 body{background:var(--bg);color:var(--fg);font:400 16px/1.6 var(--fb),system-ui,sans-serif;overflow-x:hidden}
 body:after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.05;z-index:90;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence baseFrequency='.9'/%3E%3C/filter%3E%3Crect width='120' height='120' filter='url(%23n)'/%3E%3C/svg%3E")}
@@ -79,3 +79,14 @@ pre.sum{background:var(--g1);border:1px solid var(--g2);padding:1rem;white-space
 /* ---- Panel: vista previa y opciones de diseño ---- */
 .sin-grano body:after{display:none}
 .pv-bar{position:fixed;left:0;right:0;bottom:0;z-index:99;background:var(--red);color:#fff;font:.7rem/1.2 monospace;letter-spacing:.15em;padding:.6rem 1rem;text-align:center}.pv-bar a{margin-left:1rem;color:#fff;font-weight:700}
+
+/* ---- Pie de página, contacto y equipo ---- */
+.foot{border-top:1px solid var(--g2);padding:3rem 0 5rem;margin-top:2rem;background:var(--bg)}
+.fgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:2rem}
+.foot p{margin:.2rem 0;font-size:.9rem}.foot a{text-decoration:none;color:var(--fg)}.foot a:hover{color:var(--red)}
+.flogo{font:2.4rem var(--ft);letter-spacing:.08em;color:var(--red)}.fcopy{margin-top:2.5rem!important;font-size:.65rem}
+.ficha.contacto{max-width:900px;margin-top:2rem}.ficha.contacto dd{font:1.6rem var(--ft);letter-spacing:.05em}.ficha.contacto a{text-decoration:none}.ficha.contacto a:hover{color:var(--red)}
+.card .ini{position:absolute;inset:0;display:grid;place-content:center;font:clamp(4rem,10vw,7rem) var(--ft);letter-spacing:.05em;color:var(--g2)}
+.card:hover .ini{color:var(--red)}
+[hidden]{display:none!important}
+main.wrap{padding-top:8rem;padding-bottom:4rem}@media(max-width:700px){main.wrap{padding-top:6rem}}
