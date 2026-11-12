@@ -20,7 +20,7 @@ wrangler.jsonc                 ← configuración del Worker (nombre, almacenami
 3. Nombre: `Panel Redroom`.
 4. **Add public hostname**:
    - Subdomain: `redroom`
-   - Domain: tu dominio `….workers.dev` (el mismo de la web)
+   - Domain: `redroomchile.cl` con la ruta `/admin`
    - Path: `admin`
 5. En **Access policies → Create new policy**:
    - Nombre: `Correos autorizados`, Action: **Allow**
@@ -31,7 +31,7 @@ wrangler.jsonc                 ← configuración del Worker (nombre, almacenami
    - **Application Audience (AUD) Tag**: en la aplicación → *Overview* / *Basic information*.
    - **Team domain**: en *Settings → Team name and domain*, por ejemplo `https://redroom.cloudflareaccess.com`.
 
-Cuando esos dos datos están en `wrangler.jsonc` y se publica, el panel queda funcionando en `tusitio/admin`.
+Cuando esos dos datos están en `wrangler.jsonc` y se publica, el panel queda funcionando en `redroomchile.cl/admin`.
 
 ## Sumar o quitar personas
 
@@ -39,7 +39,7 @@ Zero Trust → **Access controls → Applications → Panel Redroom → Policies
 
 ## Cómo se trabaja
 
-1. Entra a `tusitio/admin`, escribe tu correo y el código que te llega.
+1. Entra a `redroomchile.cl/admin`, escribe tu correo y el código que te llega.
 2. Edita en cualquier sección. Arriba aparece **Cambios sin publicar**. Se guardan solos en tu navegador por si cierras la pestaña.
 3. **Vista previa** abre la web con tus cambios (barra roja abajo). Solo tú la ves.
 4. **Publicar cambios** los deja en la web al instante.
